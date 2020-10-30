@@ -1,0 +1,35 @@
+#Snakemake configuration file
+
+#Specify paths to data files
+
+#Paths must end with forward slash
+
+#project directory
+dir_proj: "/project2/nobrega/grace/hic/donna_Jan2020/"
+
+tmp: "/scratch/midway2/gthansen/donna_Jan2020/"
+
+#scripts location
+scripts: "/project2/nobrega/grace/hic/scripts/"
+
+conda: "/project2/nobrega/grace/hic/scripts/snake/HiC-env.yaml"
+
+#text file with name of each sample
+samples: "IDs" 
+
+design_files: "/project2/nobrega/grace/hic/scripts/design_files"
+
+########HiC settings#############
+
+#Number of replicates per sample:
+reps: ["01","02"]
+
+#Lane numbers (must be same for each sample):
+lanes: [1,2,3,4,5,6,7,8]
+
+
+#Number of files to split fastqs into (more files = faster processing but more space taken up)
+n_split: 15
+
+#Use merged TSS or not: (options: merge or no)
+#TSS: no

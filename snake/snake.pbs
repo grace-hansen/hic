@@ -1,0 +1,11 @@
+#PBS -S /bin/bash
+#PBS -N snake
+#PBS -l nodes=1:ppn=16
+#PBS -l mem=4gb
+#PBS -l walltime=01:00:00:00
+#PBS -o snake.out
+#PBS -e snake.out
+module load gcc/6.2.0 && module load miniconda3/4.3.21
+source activate HiC-env
+
+/gpfs/data/nobrega-lab/grace/hic/scripts/snake/submit-snakemake.sh

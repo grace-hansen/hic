@@ -1,0 +1,165 @@
+#Snakefile
+#
+#This file will process promoter capture HiC data from fastq files to CHiCAGO-created ibed and washU-visualizable files.
+#To configure the paths to data files and other settings, edit
+#config.yaml
+#
+#to configure job submission settings for cluster, edit
+#cluster.json and submit.snakemake.sh
+
+#to run on RCC gardner use 'scripts/snake/snakemake.batch'
+import glob
+import os
+from snakemake.utils import R
+
+#Configuration -------------------------------------
+
+configfile: "/project2/nobrega/grace/hic/scripts/snake/config_debora.yaml"
+workdir: config["dir_proj"]
+env= config["conda"]
+
+#Paths for data (end with forward slash)
+dir_proj= config["dir_proj"]
+scripts=config["scripts"]
+design_files=config["design_files"]
+
+#Paths for files:
+out= dir_proj + "results/"
+conf= dir_proj + "conf/"
+logs= dir_proj + "log/"
+tmp= config["tmp"]
+
+
+#File identifiers
+samples = [line.strip() for line in open(dir_proj+config["samples"],'r')]
+reps=config["reps"]
+lanes=config["lanes"]
+
+#Settings for HiC
+n_reps=len(config["reps"])
+n_lanes=len(config["lanes"])
+
+#Get 
+
+#Number of split files to make
+n_splits=config["n_split"]
+splits = ["{0:02}".format(i) for i in range(1,config["n_split"]+1)]
+
+assert os.path.exists(dir_proj), "Project directory exists"
+
+#Directory to send log files. Needs to be created manually since it
+#is not a file created by a Snakemake rule.
+if not os.path.isdir(conf):
+     os.mkdir(conf)
+if not os.path.isdir(tmp):
+     os.mkdir(tmp)
+if not os.path.isdir(logs):
+     os.mkdir(logs)
+
+#Constraints on rep and lane, so that snakemake can name files appropriately
+
+wildcard_constraints:
+    rep="\d+",
+    lane="\d+"
+
+#def get_input_merge_bams(wildcards):
+#    lanes=list(set([f.split('L')[1] for f in [e.split('_')[-2] for e in glob.glob('%s/%s*'%(tmp,[wildcards.sample]))]]))
+#    return expand("{tmp}{sample}_{rep}_L{lane}_R1_2.part-{split}.hicup.bam",tmp=tmp,sample=[wildcards.sample],rep=[wildcards.rep],lane=lanes,split=splits)
+
+#def get_input_merge_reps(wildcards):
+#    reps=list(set([e.split('_')[-3] for e in glob.glob('%s/%s*'%(out,[wildcards.sample]))]))
+#    return expand("{out}{sample}_{rep}_R1_2.hicup.dedup.bam",out=out,sample=[wildcards.sample],rep=reps)
+
+#Rules -------------------------------------
+
+rule all: #Here we tell snakemake everything that we want to be made
+    input:
+        expand(tmp+"{sample}_{rep}_L{lane}_R1.part-{split}.fastq",sample=samples,rep=reps,lane=lanes,split=splits)
+        #dir_proj+"cleaned_up",
+        #expand(out+"chicago_{sample}_{rep}_washU_text.txt",sample=samples,rep=reps)
+
+rule split_fastq:
+    input:
+        R1=tmp+"{sample}_{rep}_L{lane}_R1.fastq.bz2",
+        R2=tmp+"{sample}_{rep}_L{lane}_R2.fastq.bz2"
+    output:
+        expand(tmp+"{{sample}}_{{rep}}_L{{lane}}_R1.part-{split}.fastq",split=splits),
+        expand(tmp+"{{sample}}_{{rep}}_L{{lane}}_R2.part-{split}.fastq",split=splits)
+    shell:
+        scripts+"split_fastq.sh {tmp} {tmp} {input.R1} {input.R2} {n_splits}"
+
+rule run_hicup:
+    input:
+        R1=tmp+"{sample}_{rep}_L{lane}_R1.part-{split}.fastq"
+    output:
+        tmp+"{sample}_{rep}_L{lane}_R1_2.part-{split}.hicup.bam"
+    shell:
+        scripts+"run_hicup.sh {dir_proj} {tmp} {wildcards.sample}_{wildcards.rep} {input}"
+
+rule merge_bams:
+    input:
+        expand(tmp+"{{sample}}_{{rep}}_L{lane}_R1_2.part-{split}.hicup.bam",lane=lanes,split=splits)
+    output:
+        out+"{sample}_{rep}_R1_2.hicup.bam"
+    shell:
+        scripts+"merge_bams.sh {dir_proj} {tmp} {wildcards.sample}_{wildcards.rep} {n_splits}"
+
+rule run_hicup_deduplicator:
+    input:
+        out+"{sample}_{rep}_R1_2.hicup.bam"
+    output:
+        out+"{sample}_{rep}_R1_2.hicup.dedup.bam"
+    shell:
+        scripts+"hicup_deduplicator.sh {dir_proj} {wildcards.sample}_{wildcards.rep}"
+
+rule bam2chicago_reps:
+    input:
+        out+"{sample}_{rep}_R1_2.hicup.dedup.bam"
+    output:
+        out+"{sample}_{rep}.chinput"
+    shell:
+        scripts+"/run_bam2chicago.sh {out} {input} {design_files}"
+
+rule chicago_reps: #Need new modules for this command: gcc/5.4.0 && module load R/3.3.2
+    input:
+        out+"{sample}_{rep}.chinput"
+    output:
+        out+"chicago_{sample}_{rep}_washU_text.txt"
+    conda:
+        "{env}"
+    shell:
+        "/project2/nobrega/grace/conda/HiC-env/bin/Rscript "+scripts+"run_CHiCAGO.R {out} {design_files} {input} chicago_{wildcards.sample}_{wildcards.rep}"
+
+rule merge_reps:
+    input:
+        expand(out+"{{sample}}_{rep}_R1_2.hicup.dedup.bam",rep=reps)
+    output:
+        out+"{sample}_merged_R1_2.hicup.dedup.bam"
+    shell:
+        scripts+"merge_reps.sh {out} {wildcards.sample}"
+
+rule bam2chicago_merge:
+    input:
+       out+"{sample}_merged_R1_2.hicup.dedup.bam" 
+    output:
+        out+"{sample}_merged.chinput"
+    shell:
+       scripts+"run_bam2chicago.sh {out} {input} {design_files}"
+
+rule chicago_merge:
+    input:
+        out+"{sample}_merged.chinput"
+    output:
+        out+"chicago_{sample}_merged_washU_text.txt"
+    conda:
+        "{env}"
+    shell:
+        "/project2/nobrega/grace/conda/HiC-env/bin/Rscript "+scripts+"run_CHiCAGO.R {out} {design_files} {input} chicago_{wildcards.sample}_merged"
+
+rule cleanup:
+    input:
+        expand(out+"chicago_{sample}_merged_washU_text.txt",sample=samples)
+    output:
+        dir_proj+"cleaned_up"
+    shell:
+        'rm -r {tmp} && rm {out}Rplots.pdf && echo "cleaned up" > {dir_proj}cleaned_up'

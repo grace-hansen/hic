@@ -1,0 +1,55 @@
+{
+    "__default__" :
+    {
+        "mem" : 4,
+        "n" : 1,
+        "time" : "12:00:00", 
+        "name" : "{rule}-{wildcards.sample}",
+        "logfile": "log/snake-{rule}-{wildcards.sample}.out"
+    },
+
+"split_fastq" :
+    {
+            "mem" : 8,
+            "logfile": "log/snake-{rule}-{wildcards.sample}_{wildcards.rep}_L{wildcards.lane}.out",
+    },
+"run_hicup" :
+    {
+            "logfile": "log/snake-{rule}-{wildcards.sample}_{wildcards.rep}_L{wildcards.lane}.part-{wildcards.split}.out",
+    },
+"merge_bams" :
+    {
+            "mem" : 8,
+            "logfile": "log/snake-{rule}-{wildcards.sample}_{wildcards.rep}.out",
+    },
+"run_hicup_deduplicator" :
+    {
+            "logfile": "log/snake-{rule}-{wildcards.sample}_{wildcards.rep}.out",
+    },
+"bam2chicago_reps" :
+    {
+            "mem": 16,
+            "logfile": "log/snake-{rule}-{wildcards.sample}_{wildcards.rep}.out",
+    },
+"chicago_reps" :
+    {
+            "mem": 16,
+            "logfile": "log/snake-{rule}-{wildcards.sample}_{wildcards.rep}.out",
+    },
+"merge_reps" :
+    {
+            "mem": 8
+    },
+"bam2chicago_merge" :
+    {
+            "mem": 16
+    },
+"chicago_merge" :
+    {
+            "mem": 16
+    },
+"cleanup" :
+    {
+            "mem": 4
+    }
+}
